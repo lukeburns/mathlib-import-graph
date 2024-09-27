@@ -45,6 +45,10 @@
       list-style: none;
       columns: 10em auto;
     }
+
+    .key-wrapper {
+      display: none;
+    }
     .summary, .key-wrapper {
       text-shadow:
          0    0   5px white,
@@ -94,8 +98,10 @@
   <div class="summary">
     <p>A visualization of the import graph of <a href="https://github.com/leanprover-community/mathlib">Lean's Mathlib</a>, built with <a href="https://www.sigmajs.org/">Sigma.js</a>.
     Node sizes indicate the number of declarations in the file.</p>
+    <p>Click on a node to drop it from the graph.</p>
 
-    <label><input type="checkbox" id="pause" checked/> Pause graph layout</label>
+    <label><input type="checkbox" id="pause"/> Pause graph layout</label>
+    <label><input type="checkbox" id="labels"/> Show labels</label>
   </div>
   <div class="key-wrapper">
     <ul id="key"></ul>
@@ -157,6 +163,7 @@ var common_prefix = function(a, b) {
 let container = document.getElementById('sigma-example');
 let key = document.getElementById('key');
 let pause = document.getElementById('pause');
+let labels = document.getElementById('labels');
 
 var render_gexf = (gexf) => {
   let graph = graphologyLibrary.gexf.parse(graphology.Graph, gexf);
@@ -236,7 +243,7 @@ var render_gexf = (gexf) => {
   }
 
   // remove the node that's connected to everything!
-  graph.dropNode('core:init.default');
+  // graph.dropNode('core:init.default');
 
   // remove the `mathlib` prefix
   for (let [node, node_data] of graph.nodeEntries()) {
@@ -256,6 +263,14 @@ var render_gexf = (gexf) => {
   //size the nodes
   for (let [node, node_data] of graph.nodeEntries()) {
     node_data.size = 2 + Math.sqrt(node_data.decl_count) / 5;
+    // let label = graph.getNodeAttribute(node, 'label')
+    // try {
+    //   node_data.size = graph.neighbors(label).length ///graph.neighbors('core:init.default')
+    //   // console.log('1', label, graph.neighbors(label))
+    // } catch (err) {
+    //   node_data.size = graph.neighbors('mathlib:'+label).length///graph.neighbors('core:init.default')
+    //   // console.log('2', label, graph.neighbors('mathlib:'+label))
+    // }
   }
 
   // set up the edge weights, to make the layout somewhat ok
@@ -294,8 +309,8 @@ var render_gexf = (gexf) => {
   var force_atlas_settings = {
     barnesHutOptimize: false,
     strongGravityMode: false,
-    gravity: 0.05,
-    scalingRatio: 10,
+    gravity: 10,
+    scalingRatio: 1,
     slowDown: 10,
     edgeWeightInfluence: 1,
   };
@@ -322,6 +337,15 @@ var render_gexf = (gexf) => {
       worker.start();
     }
   });
+
+  const cls = document.getElementsByClassName('key-wrapper')[0]
+  labels.addEventListener('change', (event) => {
+    if (event.currentTarget.checked) {
+      cls.style.display = 'block'
+    } else {
+      cls.style.display = 'none'
+    }
+  })
 
   window.graph = graph;
   if (window.renderer) {
@@ -414,6 +438,17 @@ var render_gexf = (gexf) => {
   }
 
   for (let [top_level, li] of keyElems) {
+    li.addEventListener('click', (event) => {
+      let nfiles = 0;
+      let ndecls = 0;
+      for (let [n, node_data] of graph.nodeEntries()) {
+        if (node_data.path[0] == top_level) {
+          console.log('dropping', n)
+          graph.dropNode(n)
+        }
+      }
+      renderer.refresh();
+    })
     li.addEventListener('mouseenter', (event) => {
       setHoveredNode(undefined);
       state.hoveredPath = top_level;
@@ -467,8 +502,13 @@ var render_gexf = (gexf) => {
   renderer.on("enterNode", ({ node }) => { setHoveredNode(node);  });
   renderer.on("leaveNode", () => { setHoveredNode(default_hover ? state.defaultNode : undefined); });
   renderer.on("clickNode", ({ node }) => {
-    let path = graph.getNodeAttribute(node, 'path');
-    window.open(docs_url + path.join('/') + ".html");
+    // let path = graph.getNodeAttribute(node, 'path');
+    // window.open(docs_url + path.join('/') + ".html");
+    try {
+      graph.dropNode(graph.getNodeAttribute(node, 'label'));
+    } catch (err) {
+      graph.dropNode('mathlib:'+graph.getNodeAttribute(node, 'label'));
+    }
   });
 
   setHoveredNode(default_hover ? state.defaultNode : undefined);
