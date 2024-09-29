@@ -98,10 +98,11 @@
   <div class="summary">
     <p>A visualization of the import graph of <a href="https://github.com/leanprover-community/mathlib">Lean's Mathlib</a>, built with <a href="https://www.sigmajs.org/">Sigma.js</a>.
     Node sizes indicate the number of declarations in the file.</p>
-    <p>Click to drop or add nodes. Cmd+Click to open.</p>
+    <p>Click to add or drop nodes. Cmd+Click to open docs.</p>
 
     <label><input type="checkbox" id="pause" checked /> Pause graph layout</label>
     <label><input type="checkbox" id="labels" checked /> Show labels</label>
+    <button id="clear">Clear graph</button>
   </div>
   <div class="key-wrapper">
     <ul id="key"></ul>
@@ -165,6 +166,7 @@ let container = document.getElementById('sigma-example');
 let key = document.getElementById('key');
 let pause = document.getElementById('pause');
 let labels = document.getElementById('labels');
+let clear = document.getElementById('clear');
 
 var render_gexf = (gexf) => {
   let graph = graphologyLibrary.gexf.parse(graphology.Graph, gexf);
@@ -327,6 +329,8 @@ var render_gexf = (gexf) => {
   });
 
   var original = graph.copy()
+  // graph.clear()
+  clear.addEventListener('click', () => graph.clear())
 
   // now send it to a background task
   var worker = new graphologyLibrary.FA2Layout(graph, {
@@ -457,10 +461,10 @@ var render_gexf = (gexf) => {
         let ndropped = 0;
         for (let [n, node_data] of graph.nodeEntries()) {
           if (node_data.path[0] == top_level) {
-            graph.dropNode(n)
-            for (let [e, edge_data] of original.edgeEntries(n)) {
-              try { graph.dropEdge(e) } catch (err) {}
+            for (let [e, edge_data] of graph.edgeEntries(n)) {
+              graph.dropEdge(e)
             }
+            graph.dropNode(n)
             ndropped++
           }
         }
@@ -474,7 +478,7 @@ var render_gexf = (gexf) => {
           }
           added.forEach((n) => {
             for (let [e, edge_data, source, target] of original.edgeEntries(n)) {
-              if (!graph.hasEdge(source, target)) {
+              if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) {
                 try { graph.addEdge(source, target, edge_data) } catch (err) {}
               }
             }
