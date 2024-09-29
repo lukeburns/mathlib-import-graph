@@ -100,7 +100,7 @@
     Node sizes indicate the number of declarations in the file.</p>
     <p>Click to add or drop nodes. Cmd+Click to open docs.</p>
 
-    <label><input type="checkbox" id="pause" checked /> Pause graph layout</label>
+    <label><input type="checkbox" id="pause" /> Pause graph layout</label>
     <label><input type="checkbox" id="labels" checked /> Show labels</label>
     <button id="clear">Clear graph</button>
   </div>
@@ -313,6 +313,7 @@ var render_gexf = (gexf) => {
     node_data.y = 0.1*r * Math.sin(theta * 2 * Math.PI);
   }
 
+var original = graph.copy()
   var force_atlas_settings = {
     barnesHutOptimize: false,
     strongGravityMode: false,
@@ -328,7 +329,6 @@ var render_gexf = (gexf) => {
     settings: force_atlas_settings,
   });
 
-  var original = graph.copy()
   // graph.clear()
   clear.addEventListener('click', () => graph.clear())
 
@@ -452,6 +452,19 @@ var render_gexf = (gexf) => {
       statusMsgElem.innerHTML = '';
     }
   }  
+  let setTopLevelStatus = function(top_level) {
+    let nfiles = 0;
+    let ndecls = 0;
+    let count = 0;
+    for (let [n, node_data] of graph.nodeEntries()) {
+      if (node_data.path[0] == top_level) {
+        count++
+        nfiles += 1;
+        ndecls += node_data.decl_count;
+      }
+    }
+    setStatus(`Click to ${count ? 'drop' : 'add' } <strong>${top_level}</strong>. Highlighting ${nfiles} files consisting of ${ndecls} declarations.`);
+  }
 
   for (let [top_level, li] of keyElems) {
     li.addEventListener('click', (event) => {
@@ -477,28 +490,21 @@ var render_gexf = (gexf) => {
             }
           }
           added.forEach((n) => {
-            for (let [e, edge_data, source, target] of original.edgeEntries(n)) {
-              if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) {
+            for (let [e, edge_data, source, target] of original.edgeEntries()) {
+              if (!graph.hasEdge(source, target)) {
                 try { graph.addEdge(source, target, edge_data) } catch (err) {}
               }
             }
           })
         }
+        setTopLevelStatus(top_level);
         renderer.refresh();
       }
     })
     li.addEventListener('mouseenter', (event) => {
       setHoveredNode(undefined);
       state.hoveredPath = top_level;
-      let nfiles = 0;
-      let ndecls = 0;
-      for (let [n, node_data] of graph.nodeEntries()) {
-        if (node_data.path[0] == top_level) {
-          nfiles += 1;
-          ndecls += node_data.decl_count;
-        }
-      }
-      setStatus("Highlighting " + nfiles + " files consisting of "+ndecls+" declarations");
+      setTopLevelStatus(top_level);
       renderer.refresh();
     });
     li.addEventListener('mouseleave', (event) => {
