@@ -46,9 +46,9 @@
       columns: 10em auto;
     }
 
-    .key-wrapper {
+    /*.key-wrapper {
       display: none;
-    }
+    }*/
     .summary, .key-wrapper {
       text-shadow:
          0    0   5px white,
@@ -98,10 +98,10 @@
   <div class="summary">
     <p>A visualization of the import graph of <a href="https://github.com/leanprover-community/mathlib">Lean's Mathlib</a>, built with <a href="https://www.sigmajs.org/">Sigma.js</a>.
     Node sizes indicate the number of declarations in the file.</p>
-    <p>Click on a node to drop it from the graph.</p>
+    <p>Click to drop or add nodes. Cmd+Click to open.</p>
 
-    <label><input type="checkbox" id="pause"/> Pause graph layout</label>
-    <label><input type="checkbox" id="labels"/> Show labels</label>
+    <label><input type="checkbox" id="pause" checked /> Pause graph layout</label>
+    <label><input type="checkbox" id="labels" checked /> Show labels</label>
   </div>
   <div class="key-wrapper">
     <ul id="key"></ul>
@@ -115,6 +115,7 @@
   
 var params = new URLSearchParams(window.location.search);
 var docs_url = params.get("docs_url") || "https://leanprover-community.github.io/mathlib_docs/";
+var gh_url = "https://github.com/leanprover-community/mathlib4/tree/master/Mathlib/"
 
 // From stackoverflow
 /**
@@ -262,8 +263,12 @@ var render_gexf = (gexf) => {
 
   //size the nodes
   for (let [node, node_data] of graph.nodeEntries()) {
+    const label = graph.getNodeAttribute(node, 'label')
+    // drop archive labels
+    if (label.indexOf('mathlib-archive') > -1) {
+      graph.dropNode(node)
+    }
     node_data.size = 2 + Math.sqrt(node_data.decl_count) / 5;
-    // let label = graph.getNodeAttribute(node, 'label')
     // try {
     //   node_data.size = graph.neighbors(label).length ///graph.neighbors('core:init.default')
     //   // console.log('1', label, graph.neighbors(label))
@@ -321,6 +326,8 @@ var render_gexf = (gexf) => {
     settings: force_atlas_settings,
   });
 
+  var original = graph.copy()
+
   // now send it to a background task
   var worker = new graphologyLibrary.FA2Layout(graph, {
     settings: force_atlas_settings,
@@ -346,6 +353,11 @@ var render_gexf = (gexf) => {
       cls.style.display = 'none'
     }
   })
+
+  const toCamelCase = str => str
+  .split('_')
+  .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+  .join('');
 
   window.graph = graph;
   if (window.renderer) {
@@ -435,19 +447,41 @@ var render_gexf = (gexf) => {
       statusElem.classList.remove('active');
       statusMsgElem.innerHTML = '';
     }
-  }
+  }  
 
   for (let [top_level, li] of keyElems) {
     li.addEventListener('click', (event) => {
-      let nfiles = 0;
-      let ndecls = 0;
-      for (let [n, node_data] of graph.nodeEntries()) {
-        if (node_data.path[0] == top_level) {
-          console.log('dropping', n)
-          graph.dropNode(n)
+      if (event.metaKey) {
+        window.open(gh_url + toCamelCase(top_level));
+      } else {
+        let ndropped = 0;
+        for (let [n, node_data] of graph.nodeEntries()) {
+          if (node_data.path[0] == top_level) {
+            graph.dropNode(n)
+            for (let [e, edge_data] of original.edgeEntries(n)) {
+              try { graph.dropEdge(e) } catch (err) {}
+            }
+            ndropped++
+          }
         }
+        if (!ndropped) {
+          let added = []
+          for (let [n, node_data] of original.nodeEntries()) {
+            if (node_data.path[0] == top_level) {
+              graph.addNode(n, node_data)
+              added.push(n)
+            }
+          }
+          added.forEach((n) => {
+            for (let [e, edge_data, source, target] of original.edgeEntries(n)) {
+              if (!graph.hasEdge(source, target)) {
+                try { graph.addEdge(source, target, edge_data) } catch (err) {}
+              }
+            }
+          })
+        }
+        renderer.refresh();
       }
-      renderer.refresh();
     })
     li.addEventListener('mouseenter', (event) => {
       setHoveredNode(undefined);
@@ -478,9 +512,9 @@ var render_gexf = (gexf) => {
       var descendants = new Set();
       var ancestors = new Set();
       let ndecls = 0;
-      graphologyLibrary.traversal.bfsFromNode(graph, node, function(node, attr, depth) {
+      graphologyLibrary.traversal.bfsFromNode(original, node, function(node, attr, depth) {
         descendants.add(node);
-        ndecls += graph.getNodeAttribute(node, 'decl_count');
+        ndecls += original.getNodeAttribute(node, 'decl_count');
       });
       graphologyLibrary.traversal.bfsFromNode(rev_graph, node, function(node, attr, depth) {
         ancestors.add(node);
@@ -499,15 +533,18 @@ var render_gexf = (gexf) => {
 
     renderer.refresh();
   }
-  renderer.on("enterNode", ({ node }) => { setHoveredNode(node);  });
+  renderer.on("enterNode", ({ node }) => { setHoveredNode(node); });
   renderer.on("leaveNode", () => { setHoveredNode(default_hover ? state.defaultNode : undefined); });
-  renderer.on("clickNode", ({ node }) => {
-    // let path = graph.getNodeAttribute(node, 'path');
-    // window.open(docs_url + path.join('/') + ".html");
-    try {
-      graph.dropNode(graph.getNodeAttribute(node, 'label'));
-    } catch (err) {
-      graph.dropNode('mathlib:'+graph.getNodeAttribute(node, 'label'));
+  renderer.on("clickNode", ({ node, event }) => {
+    if (event.metaKey) {
+      let path = graph.getNodeAttribute(node, 'path');
+      window.open(docs_url + path.join('/') + ".html");
+    } else {
+      try {
+        graph.dropNode(graph.getNodeAttribute(node, 'label'));
+      } catch (err) {
+        graph.dropNode('mathlib:'+graph.getNodeAttribute(node, 'label'));
+      }
     }
   });
 
