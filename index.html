@@ -474,7 +474,7 @@ var original = graph.copy()
         let ndropped = 0;
         for (let [n, node_data] of graph.nodeEntries()) {
           if (node_data.path[0] == top_level) {
-            for (let [e, edge_data] of graph.edgeEntries(n)) {
+            for (let [e] of graph.edgeEntries(n)) {
               graph.dropEdge(e)
             }
             graph.dropNode(n)
@@ -489,10 +489,10 @@ var original = graph.copy()
               added.push(n)
             }
           }
-          added.forEach((n) => {
-            for (let [e, edge_data, source, target] of original.edgeEntries()) {
-              if (!graph.hasEdge(source, target)) {
-                try { graph.addEdge(source, target, edge_data) } catch (err) {}
+          added.forEach(n => {
+            for (let [e, edge_data, source, target] of original.edgeEntries(n)) {
+              if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) {
+                graph.addEdgeWithKey(e, source, target, edge_data)
               }
             }
           })
